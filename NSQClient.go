@@ -22,7 +22,7 @@ type NSQClientCfg struct {
 type NSQClient struct {
 	App      catu.App
 	Config   *nsq.Config
-	Queues   map[string]*msgbroker.Queue
+	Queues   map[string]msgbroker.Queue
 	Producer *nsq.Producer
 }
 
@@ -95,11 +95,11 @@ func (c *NSQClient) Publish(queueName string, data []byte) error {
 
 // Get queue by queueName
 func (c *NSQClient) GetQueue(name string) msgbroker.Queue {
-	return *c.Queues[name]
+	return c.Queues[name]
 }
 
 // Set one queue in queue list
-func (c *NSQClient) SetQueue(name string, queue *msgbroker.Queue) error {
+func (c *NSQClient) SetQueue(name string, queue msgbroker.Queue) error {
 	c.Queues[name] = queue
 	return nil
 }
