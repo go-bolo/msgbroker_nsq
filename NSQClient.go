@@ -13,10 +13,18 @@ import (
 
 func NewNSQClient(cfg *NSQClientCfg) *NSQClient {
 	client := NSQClient{}
+
+	if cfg.Config != nil {
+		client.Config = cfg.Config
+		client.LogLevel = cfg.LogLevel
+	}
+
 	return &client
 }
 
 type NSQClientCfg struct {
+	Config   *nsq.Config
+	LogLevel nsq.LogLevel
 }
 
 type NSQClient struct {
@@ -24,12 +32,17 @@ type NSQClient struct {
 	Config   *nsq.Config
 	Queues   map[string]msgbroker.Queue
 	Producer *nsq.Producer
+	LogLevel nsq.LogLevel
 }
 
 func (c *NSQClient) Init(app catu.App) error {
 	c.App = app
 	cfgs := app.GetConfiguration()
-	c.Config = nsq.NewConfig()
+
+	if c.Config == nil {
+		c.Config = nsq.NewConfig()
+	}
+
 	addr := cfgs.GetF("NSQ_ADDR", "127.0.0.1:4150")
 
 	producer, err := nsq.NewProducer(addr, c.Config)
@@ -49,6 +62,10 @@ func (c *NSQClient) Subscribe(queueName string, handler msgbroker.MessageHandler
 	consumer, err := nsq.NewConsumer(queueName, queueName, c.Config)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if c.LogLevel != 0 {
+		consumer.SetLoggerLevel(c.LogLevel)
 	}
 
 	// Set the Handler for messages received by this Consumer. Can be called multiple times.
