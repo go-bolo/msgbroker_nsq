@@ -12,7 +12,9 @@ import (
 )
 
 func NewNSQClient(cfg *NSQClientCfg) *NSQClient {
-	client := NSQClient{}
+	client := NSQClient{
+		Logger: &loggerLogrus{},
+	}
 
 	if cfg.Config != nil {
 		client.Config = cfg.Config
@@ -33,6 +35,7 @@ type NSQClient struct {
 	Queues   map[string]msgbroker.Queue
 	Producer *nsq.Producer
 	LogLevel nsq.LogLevel
+	Logger   *loggerLogrus
 }
 
 func (c *NSQClient) Init(app catu.App) error {
@@ -63,6 +66,8 @@ func (c *NSQClient) Subscribe(queueName string, handler msgbroker.MessageHandler
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	consumer.SetLogger(c.Logger, c.LogLevel)
 
 	if c.LogLevel != 0 {
 		consumer.SetLoggerLevel(c.LogLevel)
@@ -121,46 +126,14 @@ func (c *NSQClient) SetQueue(name string, queue msgbroker.Queue) error {
 	return nil
 }
 
-type NSQQueue struct {
-	Name    string
-	Handler msgbroker.MessageHandler
-}
-
-type NSQQueueHandler struct {
-}
-
-func (q *NSQQueue) GetName() string {
-	return q.Name
-}
-
-func (q *NSQQueue) SetName(name string) error {
-	q.Name = name
-	return nil
-}
-
-func (q *NSQQueue) GetHandler() msgbroker.MessageHandler {
-	return q.Handler
-}
-
-func (q *NSQQueue) SetHandler(handler msgbroker.MessageHandler) error {
-	q.Handler = handler
-	return nil
-}
-
-type NSQMessage struct {
-	Data *[]byte
-}
-
-func (m *NSQMessage) GetData() *[]byte {
-	return m.Data
-}
-
 func (c *NSQClient) ConnectToProducer() error {
 	config := nsq.NewConfig()
 	producer, err := nsq.NewProducer("127.0.0.1:4150", config)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	producer.SetLogger(c.Logger, c.LogLevel)
 
 	c.Producer = producer
 
@@ -178,7 +151,7 @@ func (c *NSQClient) Close() error {
 	// Gracefully stop the consumer.
 	// consumer.Stop()
 
-	// // Gracefully stop the producer when appropriate (e.g. before shutting down the service)
+	// Gracefully stop the producer when appropriate (e.g. before shutting down the service)
 	// producer.Stop()
 	return nil
 }
