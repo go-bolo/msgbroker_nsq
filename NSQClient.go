@@ -2,6 +2,7 @@ package msgbroker_nsq
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -13,7 +14,8 @@ import (
 
 func NewNSQClient(cfg *NSQClientCfg) *NSQClient {
 	client := NSQClient{
-		Logger: &loggerLogrus{},
+		Logger:          &loggerLogrus{},
+		AutoCreateTopic: cfg.AutoCreateTopic,
 	}
 
 	if cfg.Config != nil {
@@ -25,17 +27,19 @@ func NewNSQClient(cfg *NSQClientCfg) *NSQClient {
 }
 
 type NSQClientCfg struct {
-	Config   *nsq.Config
-	LogLevel nsq.LogLevel
+	Config          *nsq.Config
+	LogLevel        nsq.LogLevel
+	AutoCreateTopic bool
 }
 
 type NSQClient struct {
-	App      catu.App
-	Config   *nsq.Config
-	Queues   map[string]msgbroker.Queue
-	Producer *nsq.Producer
-	LogLevel nsq.LogLevel
-	Logger   *loggerLogrus
+	App             catu.App
+	Config          *nsq.Config
+	Queues          map[string]msgbroker.Queue
+	Producer        *nsq.Producer
+	LogLevel        nsq.LogLevel
+	Logger          *loggerLogrus
+	AutoCreateTopic bool
 }
 
 func (c *NSQClient) Init(app catu.App) error {
@@ -50,7 +54,7 @@ func (c *NSQClient) Init(app catu.App) error {
 
 	producer, err := nsq.NewProducer(addr, c.Config)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	c.Producer = producer
@@ -64,7 +68,7 @@ func (c *NSQClient) Subscribe(queueName string, handler msgbroker.MessageHandler
 	cfgs := c.App.GetConfiguration()
 	consumer, err := nsq.NewConsumer(queueName, queueName, c.Config)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	consumer.SetLogger(c.Logger, c.LogLevel)
@@ -81,11 +85,17 @@ func (c *NSQClient) Subscribe(queueName string, handler msgbroker.MessageHandler
 	})
 
 	addr := cfgs.GetF("NSQ_LOOKUPD_ADDR", "127.0.0.1:4161")
+
+	if c.AutoCreateTopic {
+		// create topic if not exists
+		c.CreateTopic(queueName)
+	}
+
 	// Use nsqlookupd to discover nsqd instances.
 	// See also ConnectToNSQD, ConnectToNSQDs, ConnectToNSQLookupds.
 	err = consumer.ConnectToNSQLookupd(addr)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	return "", nil
@@ -127,10 +137,14 @@ func (c *NSQClient) SetQueue(name string, queue msgbroker.Queue) error {
 }
 
 func (c *NSQClient) ConnectToProducer() error {
+	cfgs := c.App.GetConfiguration()
 	config := nsq.NewConfig()
-	producer, err := nsq.NewProducer("127.0.0.1:4150", config)
+
+	addr := cfgs.GetF("NSQ_ADDR", "127.0.0.1:4150")
+
+	producer, err := nsq.NewProducer(addr, config)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	producer.SetLogger(c.Logger, c.LogLevel)
@@ -153,5 +167,19 @@ func (c *NSQClient) Close() error {
 
 	// Gracefully stop the producer when appropriate (e.g. before shutting down the service)
 	// producer.Stop()
+	return nil
+}
+
+func (c *NSQClient) CreateTopic(name string) error {
+	cfgs := c.App.GetConfiguration()
+	addr := cfgs.GetF("NSQ_LOOKUPD_ADDR", "127.0.0.1:4161")
+
+	resp, err := http.Post("http://"+addr+"/topic/create?topic="+name, "text/plain", nil)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
 	return nil
 }
