@@ -1,8 +1,8 @@
-# NSQ message broker module for Catupiri framework
+# NSQ message broker module for Go BOlo framework
 
 ## Usage:
 
-See: https://github.com/go-catupiry/msgbroker
+See: https://github.com/go-bolo/msgbroker
 
 # Licence
 

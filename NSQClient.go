@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/go-catupiry/catu"
-	"github.com/go-catupiry/msgbroker"
+	"github.com/go-bolo/bolo"
+	"github.com/go-bolo/msgbroker"
 	"github.com/nsqio/go-nsq"
 )
 
@@ -33,7 +33,7 @@ type NSQClientCfg struct {
 }
 
 type NSQClient struct {
-	App             catu.App
+	App             bolo.App
 	Config          *nsq.Config
 	Queues          map[string]msgbroker.Queue
 	Producer        *nsq.Producer
@@ -42,7 +42,7 @@ type NSQClient struct {
 	AutoCreateTopic bool
 }
 
-func (c *NSQClient) Init(app catu.App) error {
+func (c *NSQClient) Init(app bolo.App) error {
 	c.App = app
 	cfgs := app.GetConfiguration()
 

@@ -1,6 +1,6 @@
 package msgbroker_nsq
 
-import "github.com/go-catupiry/msgbroker"
+import "github.com/go-bolo/msgbroker"
 
 type NSQQueue struct {
 	Name    string
