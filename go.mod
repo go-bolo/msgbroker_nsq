@@ -1,11 +1,10 @@
-module github.com/go-catupiry/msgbroker_nsq
+module github.com/go-bolo/msgbroker_nsq
 
-go 1.17
+go 1.20
 
 require (
 	github.com/go-bolo/bolo v1.0.0
 	github.com/go-bolo/msgbroker v1.0.0
-	github.com/go-catupiry/msgbroker v0.0.1
 	github.com/nsqio/go-nsq v1.1.0
 	github.com/sirupsen/logrus v1.9.3
 )
@@ -20,8 +19,6 @@ require (
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/go-bolo/clock v0.0.3 // indirect
 	github.com/go-bolo/query_parser_to_db v1.0.0 // indirect
-	github.com/go-catupiry/catu v0.0.12 // indirect
-	github.com/go-catupiry/query_parser_to_db v0.0.3 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.14.1 // indirect
