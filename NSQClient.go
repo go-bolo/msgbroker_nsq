@@ -14,6 +14,7 @@ func NewNSQClient(cfg *NSQClientCfg) msgbroker.Client {
 	client := NSQClient{
 		Logger:          &loggerLogrus{},
 		AutoCreateTopic: cfg.AutoCreateTopic,
+		Consumers:       make(map[string]*nsq.Consumer),
 	}
 
 	if cfg.Config != nil {
@@ -34,6 +35,7 @@ type NSQClient struct {
 	App             bolo.App
 	Config          *nsq.Config
 	Queues          map[string]msgbroker.Queue
+	Consumers       map[string]*nsq.Consumer
 	Producer        *nsq.Producer
 	LogLevel        nsq.LogLevel
 	Logger          *loggerLogrus
@@ -46,6 +48,10 @@ func (c *NSQClient) Init(app bolo.App) error {
 
 	if c.Config == nil {
 		c.Config = nsq.NewConfig()
+	}
+
+	if c.Consumers == nil {
+		c.Consumers = make(map[string]*nsq.Consumer)
 	}
 
 	addr := cfgs.GetF("NSQ_ADDR", "127.0.0.1:4150")
@@ -89,7 +95,10 @@ func (c *NSQClient) Subscribe(queueName string, handler msgbroker.MessageHandler
 		return "", fmt.Errorf("Subscribe: failed to create consumer: %w", err)
 	}
 
-	return "", nil
+	// Store the consumer for tracking and later cleanup
+	c.Consumers[queueName] = consumer
+
+	return queueName, nil
 }
 
 type nsqHandlerWrapper struct {
@@ -102,7 +111,10 @@ func (h *nsqHandlerWrapper) HandleMessage(message *nsq.Message) error {
 }
 
 func (c *NSQClient) UnSubscribe(subscriberID string) {
-	panic("not implemented") // TODO: Implement
+	if consumer, exists := c.Consumers[subscriberID]; exists {
+		consumer.Stop()
+		delete(c.Consumers, subscriberID)
+	}
 }
 
 func (c *NSQClient) Publish(queueName string, data []byte) error {
@@ -160,6 +172,13 @@ func (c *NSQClient) ConnectToProducer() error {
 }
 
 func (c *NSQClient) Close() error {
+	// Stop all consumers
+	for subscriberID, consumer := range c.Consumers {
+		consumer.Stop()
+		delete(c.Consumers, subscriberID)
+	}
+
+	// Stop the producer
 	if c.Producer != nil {
 		c.Producer.Stop()
 	}
