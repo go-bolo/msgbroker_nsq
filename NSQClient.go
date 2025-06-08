@@ -1,18 +1,16 @@
 package msgbroker_nsq
 
 import (
-	"log"
+	"fmt"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
+	"time"
 
 	"github.com/go-bolo/bolo"
 	"github.com/go-bolo/msgbroker"
 	"github.com/nsqio/go-nsq"
 )
 
-func NewNSQClient(cfg *NSQClientCfg) *NSQClient {
+func NewNSQClient(cfg *NSQClientCfg) msgbroker.Client {
 	client := NSQClient{
 		Logger:          &loggerLogrus{},
 		AutoCreateTopic: cfg.AutoCreateTopic,
@@ -54,7 +52,7 @@ func (c *NSQClient) Init(app bolo.App) error {
 
 	producer, err := nsq.NewProducer(addr, c.Config)
 	if err != nil {
-		return err
+		return fmt.Errorf("Init: failed to create producer: %w", err)
 	}
 
 	c.Producer = producer
@@ -62,13 +60,11 @@ func (c *NSQClient) Init(app bolo.App) error {
 	return nil
 }
 
-// Register a handler function to receive the new messages
-// Now we support only one method for each queues
 func (c *NSQClient) Subscribe(queueName string, handler msgbroker.MessageHandler) (string, error) {
 	cfgs := c.App.GetConfiguration()
 	consumer, err := nsq.NewConsumer(queueName, queueName, c.Config)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Init: failed to create producer: %w", err)
 	}
 
 	consumer.SetLogger(c.Logger, c.LogLevel)
@@ -77,8 +73,6 @@ func (c *NSQClient) Subscribe(queueName string, handler msgbroker.MessageHandler
 		consumer.SetLoggerLevel(c.LogLevel)
 	}
 
-	// Set the Handler for messages received by this Consumer. Can be called multiple times.
-	// See also AddConcurrentHandlers.
 	consumer.AddHandler(&nsqHandlerWrapper{
 		QueueName: queueName,
 		Handler:   handler,
@@ -87,15 +81,12 @@ func (c *NSQClient) Subscribe(queueName string, handler msgbroker.MessageHandler
 	addr := cfgs.GetF("NSQ_LOOKUPD_ADDR", "127.0.0.1:4161")
 
 	if c.AutoCreateTopic {
-		// create topic if not exists
 		c.CreateTopic(queueName)
 	}
 
-	// Use nsqlookupd to discover nsqd instances.
-	// See also ConnectToNSQD, ConnectToNSQDs, ConnectToNSQLookupds.
 	err = consumer.ConnectToNSQLookupd(addr)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("Subscribe: failed to create consumer: %w", err)
 	}
 
 	return "", nil
@@ -110,27 +101,41 @@ func (h *nsqHandlerWrapper) HandleMessage(message *nsq.Message) error {
 	return h.Handler.HandleMessage(h.QueueName, &NSQMessage{Data: &message.Body})
 }
 
-// Unsubscribe handler function with subscriberID
 func (c *NSQClient) UnSubscribe(subscriberID string) {
 	panic("not implemented") // TODO: Implement
 }
 
-// Publish one message to queue
 func (c *NSQClient) Publish(queueName string, data []byte) error {
 	err := c.Producer.Publish(queueName, data)
 	if err != nil {
-		return err
+		return fmt.Errorf("Publish: failed to publish message: %w", err)
 	}
 
 	return nil
 }
 
-// Get queue by queueName
+func (c *NSQClient) MultiPublish(queueName string, dataList [][]byte) error {
+	err := c.Producer.MultiPublish(queueName, dataList)
+	if err != nil {
+		return fmt.Errorf("MultiPublish: failed to publish messages: %w", err)
+	}
+
+	return nil
+}
+
+func (c *NSQClient) DeferredPublish(queueName string, delay time.Duration, data []byte) error {
+	err := c.Producer.DeferredPublish(queueName, delay, data)
+	if err != nil {
+		return fmt.Errorf("DeferredPublish: failed to publish message: %w", err)
+	}
+
+	return nil
+}
+
 func (c *NSQClient) GetQueue(name string) msgbroker.Queue {
 	return c.Queues[name]
 }
 
-// Set one queue in queue list
 func (c *NSQClient) SetQueue(name string, queue msgbroker.Queue) error {
 	c.Queues[name] = queue
 	return nil
@@ -144,7 +149,7 @@ func (c *NSQClient) ConnectToProducer() error {
 
 	producer, err := nsq.NewProducer(addr, config)
 	if err != nil {
-		return err
+		return fmt.Errorf("ConnectToProducer: failed to create producer: %w", err)
 	}
 
 	producer.SetLogger(c.Logger, c.LogLevel)
@@ -155,18 +160,10 @@ func (c *NSQClient) ConnectToProducer() error {
 }
 
 func (c *NSQClient) Close() error {
-	log.Println("TODO!")
+	if c.Producer != nil {
+		c.Producer.Stop()
+	}
 
-	// wait for signal to exit
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
-
-	// Gracefully stop the consumer.
-	// consumer.Stop()
-
-	// Gracefully stop the producer when appropriate (e.g. before shutting down the service)
-	// producer.Stop()
 	return nil
 }
 
@@ -176,10 +173,15 @@ func (c *NSQClient) CreateTopic(name string) error {
 
 	resp, err := http.Post("http://"+addr+"/topic/create?topic="+name, "text/plain", nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("CreateTopic: failed to create topic '%s': %w", name, err)
 	}
-
 	defer resp.Body.Close()
+
+	// Check HTTP status code
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("CreateTopic: failed to create topic '%s': HTTP status %d %s",
+			name, resp.StatusCode, resp.Status)
+	}
 
 	return nil
 }
