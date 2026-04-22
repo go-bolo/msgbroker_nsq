@@ -14,6 +14,7 @@ func NewNSQClient(cfg *NSQClientCfg) msgbroker.Client {
 	client := NSQClient{
 		Logger:          &loggerLogrus{},
 		AutoCreateTopic: cfg.AutoCreateTopic,
+		Concurrency:     cfg.Concurrency,
 		Consumers:       make(map[string]*nsq.Consumer),
 	}
 
@@ -29,6 +30,7 @@ type NSQClientCfg struct {
 	Config          *nsq.Config
 	LogLevel        nsq.LogLevel
 	AutoCreateTopic bool
+	Concurrency     int
 }
 
 type NSQClient struct {
@@ -40,6 +42,7 @@ type NSQClient struct {
 	LogLevel        nsq.LogLevel
 	Logger          *loggerLogrus
 	AutoCreateTopic bool
+	Concurrency     int
 }
 
 func (c *NSQClient) Init(app bolo.App) error {
@@ -79,10 +82,17 @@ func (c *NSQClient) Subscribe(queueName string, handler msgbroker.MessageHandler
 		consumer.SetLoggerLevel(c.LogLevel)
 	}
 
-	consumer.AddHandler(&nsqHandlerWrapper{
-		QueueName: queueName,
-		Handler:   handler,
-	})
+	if c.Concurrency > 1 {
+		consumer.AddConcurrentHandlers(&nsqHandlerWrapper{
+			QueueName: queueName,
+			Handler:   handler,
+		}, c.Concurrency)
+	} else {
+		consumer.AddHandler(&nsqHandlerWrapper{
+			QueueName: queueName,
+			Handler:   handler,
+		})
+	}
 
 	addr := cfgs.GetF("NSQ_LOOKUPD_ADDR", "127.0.0.1:4161")
 

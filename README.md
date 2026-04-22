@@ -7,6 +7,7 @@ A NSQ message broker implementation for the [Go Bolo Framework](https://github.c
 - **Publisher/Subscriber pattern**: Publish and subscribe to NSQ topics
 - **Automatic topic creation**: Optional automatic topic creation
 - **Message handling**: Flexible message handler interface
+- **Concurrency support**: Process multiple messages simultaneously per topic
 - **Multiple publish modes**: Single, multiple, and deferred publishing
 - **Connection management**: Automatic connection handling and cleanup
 - **Logging integration**: Built-in logging with configurable levels
@@ -51,6 +52,7 @@ func main() {
     nsqClient := msgbroker_nsq.NewNSQClient(&msgbroker_nsq.NSQClientCfg{
         AutoCreateTopic: true,
         LogLevel:        nsq.LogLevelInfo,
+        Concurrency:     50, // Permite processar múltiplas mensagens simultaneamente
     })
 
     // Register the message broker plugin
@@ -134,6 +136,7 @@ nsqClient := msgbroker_nsq.NewNSQClient(&msgbroker_nsq.NSQClientCfg{
     Config:          nsqConfig,
     LogLevel:        nsq.LogLevelDebug,
     AutoCreateTopic: true,
+    Concurrency:     20, // Process 20 messages concurrently
 })
 ```
 
